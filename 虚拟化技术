@@ -1,0 +1,65 @@
+# 1.quem和kvm
+
+首先kvm是linux内核的一个模块，它可以让linux成为一个hypervisor，在支持vmx功能的x86处理器中，linux在原有的用户模式和内核模式新增了一个客户模式，并且客户模式也拥有自己的用户模式和内核模式，虚拟机就是运行客户模式中的，kvm模块的职责就是打开并初始化vmx功能，提供相应的接口以供虚拟机运行；
+
+qemu本身并不包含或依赖kvm模块，而是一套模拟计算机的自由软件，可以在没有kvm模块下独立运行，但是性能比较低，qemu有整套的虚拟机实现，包括处理器虚拟化，内存虚拟化，以及io设备的虚拟化，qmeu是一个用户空间进程，需要通过特定的接口，才能调用到kvm内核模块提供的功能，qemu通过kvm模式提供的系统调用接口进行内核设置，由 kmv模块将虚拟机置于处理器的特殊模式运行，qemu使用kvm提供的虚拟化功能，为自己的虚拟机提供硬件虚拟化加速以提高虚拟机的性能；
+
+所以qemu只是个计算机模拟器，而kvm为计算机的模拟功能提供加速；
+
+
+
+# 2.qemu-kvm安装虚拟机
+
+1.创建虚拟机镜像，大小为10G
+
+```
+参数：
+-f qcow2/raw qcow2格式为动态分配，raw格式为固定大小
+$ qemu-img create -f qcow2 centos7-xxx.img 10G
+```
+
+2.创建虚拟机
+
+```
+参数：
+-enable-kvm 启动kvm加速
+-name 虚拟机名
+-m 虚拟机内存大小
+-hda 为客户机指定块存储设备
+-cdrom 挂在光盘
+-boot 设置客户机的启动顺序，a表示第一软驱，b表示第二软驱，c表示第一个硬盘，d表示cd-rom，n表示从网络启动
+-vnc 设置vnc端口
+$ qemu-system-x85-64 -enable-kvm -name centos7-xxx -m 4096 -hda centos-xxx.img -cdrom centos-xxx.iso -boot d -vnc :19
+```
+
+3.启动虚拟机
+
+```
+$ qemu-system-x86-64 -enable-kvm -name centos7-xxx -m 4096 -hda centos-xxx.img -vnc :19
+```
+
+# 3.虚拟机网络
+
+1.qemu参数
+
+```
+参考：
+https://www.qemu.org/2018/05/31/nic-parameter/
+https://wiki.qemu.org/Documentation/Networking
+
+qemu使用-net参数来配置前端和后端网络，qemu网络接口分为两个部分：
+前端：guest看到的仿真硬件，也叫作nic，常见的如e1000,rt8139,virtio-net设备；
+后端：host上用来跟外部网络交换数据，常见的如user,tap,socket类型；
+```
+
+2.bridge + tun + nat
+
+```
+$ ip link add br0 type bridge  #创建交换机br0
+$ ip link set br0 up           #br0使能
+$ ip tuntap add tap0 mode tap  #创建tap0
+$ ip link set tap0 up          #tap0使能
+$ ip link set tap0 master br0  #连接tap0到br0
+$ qemu-system-x86_64 -enable-kvm -name centos7-x86_64-mini -m 4096 -hda centos7-x86_64-mini.img -vnc :19 -net nic -net tap,ifname=tap0 #启动虚拟机并连接到tap0
+注意：使用bridge连接到多个设备组子网的时候，宿主机iptables默认drop
+```
